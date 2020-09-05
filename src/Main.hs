@@ -39,8 +39,8 @@ inBetween :: Coord -> Coord -> Coord
 inBetween (Coord x1 y1) (Coord x2 y2) =
   Coord ((x1 + x2) / 2) ((y1 + y2) / 2)
 
-drawArrow :: Double -> Double -> (Double, String) -> Ribbon -> (Double, String)
-drawArrow ratio len (start, s) (Ribbon b i) =
+drawArrow :: Double -> Double -> Double -> (Double, String) -> Ribbon -> (Double, String)
+drawArrow ratio len maxVal (start, s) (Ribbon b i) =
   ( start - i,
     s
       <> "\\draw "
@@ -57,14 +57,14 @@ drawArrow ratio len (start, s) (Ribbon b i) =
       <> ";\n"
   )
   where
-    upper_limit = Limits ((- start) * ratio) (start * ratio)
-    lower_limit = Limits ((- start - i) * ratio) ((start - i) * ratio)
+    upper_limit = Limits ((start - maxVal) * ratio) (start * ratio)
+    lower_limit = Limits ((start - i - maxVal) * ratio) ((start - i) * ratio)
     mid1 = boolToCoords upper_limit ((fromIntegral $ length b) * len) (last b)
     mid2 = boolToCoords lower_limit ((fromIntegral $ length b) * len) (last b)
 
 drawRibbons :: Double -> Double -> [Ribbon] -> String
 drawRibbons ratio len rs =
-  snd $ foldl (drawArrow ratio len) (total, "") rs
+  snd $ foldl (drawArrow ratio len total) (total, "") rs
   where
     total = sum $ map (\(Ribbon _ y) -> y) rs
 
