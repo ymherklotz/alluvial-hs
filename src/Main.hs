@@ -29,7 +29,7 @@ incrX l len (d, coords) b = (d + len, boolToCoords l d b : coords)
 
 drawRibbon :: Limits -> Double -> [Bool] -> [Coord]
 drawRibbon l len b =
-  snd $ foldl (incrX l len) (0.0, []) b
+  snd $ foldl (incrX l len) (0, []) b
 
 drawCoords :: String -> [Coord] -> String
 drawCoords connection coords =
@@ -37,11 +37,11 @@ drawCoords connection coords =
 
 inBetween :: Coord -> Coord -> Coord
 inBetween (Coord x1 y1) (Coord x2 y2) =
-  Coord ((x1 + x2) / 2.0) ((y1 + y2) / 2.0)
+  Coord ((x1 + x2) / 2) ((y1 + y2) / 2)
 
 drawArrow :: Double -> Double -> (Double, String) -> Ribbon -> (Double, String)
 drawArrow ratio len (start, s) (Ribbon b i) =
-  ( (limitsHigh lower_limit),
+  ( start - i,
     s
       <> "\\draw "
       <> (drawCoords " to [out=0,in=180] " . reverse $ drawRibbon upper_limit len b)
@@ -49,7 +49,7 @@ drawArrow ratio len (start, s) (Ribbon b i) =
       <> drawCoords
         " -- "
         [ mid1,
-          moveX 2.5 (inBetween mid1 mid2),
+          moveX (len / 4) (inBetween mid1 mid2),
           mid2
         ]
       <> " -- "
@@ -59,12 +59,27 @@ drawArrow ratio len (start, s) (Ribbon b i) =
   where
     upper_limit = Limits ((- start) * ratio) (start * ratio)
     lower_limit = Limits ((- start - i) * ratio) ((start - i) * ratio)
-    mid1 = boolToCoords upper_limit ((fromIntegral $ length b) * 5.0) (last b)
-    mid2 = boolToCoords lower_limit ((fromIntegral $ length b) * 5.0) (last b)
+    mid1 = boolToCoords upper_limit ((fromIntegral $ length b) * len) (last b)
+    mid2 = boolToCoords lower_limit ((fromIntegral $ length b) * len) (last b)
 
-drawRibbons :: [Ribbon] -> String
-drawRibbons rs =
-  undefined
+drawRibbons :: Double -> Double -> [Ribbon] -> String
+drawRibbons ratio len rs =
+  snd $ foldl (drawArrow ratio len) (total, "") rs
+  where
+    total = sum $ map (\(Ribbon _ y) -> y) rs
+
+fpga2020 :: [Ribbon]
+fpga2020 =
+  [ Ribbon [True, True, True, True] 15,
+    Ribbon [True, True, True, False] 1,
+    Ribbon [True, True, False, False] 6,
+    Ribbon [False, False, True, True] 11,
+    Ribbon [False, False, True, False] 1,
+    Ribbon [False, False, False, True] 17
+  ]
+
+printAll :: IO ()
+printAll = putStrLn $ drawRibbons 0.05 3.0 fpga2020
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
