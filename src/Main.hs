@@ -24,12 +24,12 @@ boolToCoords (Limits l _) x False = Coord x l
 moveX :: Double -> Coord -> Coord
 moveX d (Coord x y) = Coord (x + d) y
 
-incrX :: Limits -> Double -> (Double, [Coord]) -> Bool -> (Double, [Coord])
-incrX l len (d, coords) b = (d + len, boolToCoords l d b : coords)
+incrX :: Double -> (Double, [Coord]) -> (Limits, Bool) -> (Double, [Coord])
+incrX len (d, coords) (l, b) = (d + len, boolToCoords l d b : coords)
 
-drawRibbon :: Limits -> Double -> [Bool] -> [Coord]
-drawRibbon l len b =
-  snd $ foldl (incrX l len) (0, []) b
+drawRibbon :: Double -> [Limits] -> [Bool] -> [Coord]
+drawRibbon len l b =
+  snd $ foldl (incrX len) (0, []) $ zip l b
 
 drawCoords :: String -> [Coord] -> String
 drawCoords connection coords =
@@ -39,34 +39,85 @@ inBetween :: Coord -> Coord -> Coord
 inBetween (Coord x1 y1) (Coord x2 y2) =
   Coord ((x1 + x2) / 2) ((y1 + y2) / 2)
 
-drawArrow :: Double -> Double -> Double -> (Double, String) -> Ribbon -> (Double, String)
-drawArrow ratio len maxVal (start, s) (Ribbon b i) =
-  ( start - i,
+condOp :: (Double -> Double) -> [Bool] -> [Double] -> [Double]
+condOp f b d =
+  fmap condOp' $ zip b d
+  where
+    condOp' (True, d') = f d'
+    condOp' (False, d') = d'
+
+condNotOp :: (Double -> Double) -> [Bool] -> [Double] -> [Double]
+condNotOp f b d =
+  fmap condOp' $ zip b d
+  where
+    condOp' (False, d') = f d'
+    condOp' (True, d') = d'
+
+drawArrow ::
+  Double ->
+  Double ->
+  (Int, [Double], [Double], String) ->
+  Ribbon ->
+  (Int, [Double], [Double], String)
+drawArrow ratio len (it, start, end, s) (Ribbon b i) =
+  ( it + 1,
+    condOp (\x -> x - i) b start,
+    condNotOp (\x -> x - i) b end,
     s
-      <> "\\draw "
-      <> (drawCoords " to [out=0,in=180] " . reverse $ drawRibbon upper_limit len b)
+      <> "\\fill[ribbon"
+      <> show it
+      <> "] "
+      <> (drawCoords " to [out=0,in=180] " . reverse $ drawRibbon len upper_limit b)
       <> " -- "
       <> drawCoords
         " -- "
         [ mid1,
-          moveX (len / 4) (inBetween mid1 mid2),
+          moveX (i * ratio) (inBetween mid1 mid2),
           mid2
         ]
       <> " -- "
-      <> (drawCoords " to [out=180,in=0] " $ drawRibbon lower_limit len b)
+      <> (drawCoords " to [out=180,in=0] " $ drawRibbon len lower_limit b)
       <> ";\n"
   )
   where
-    upper_limit = Limits ((start - maxVal) * ratio) (start * ratio)
-    lower_limit = Limits ((start - i - maxVal) * ratio) ((start - i) * ratio)
-    mid1 = boolToCoords upper_limit ((fromIntegral $ length b) * len) (last b)
-    mid2 = boolToCoords lower_limit ((fromIntegral $ length b) * len) (last b)
+    upper_limit =
+      fmap
+        ( \(st, e) ->
+            Limits (e * ratio) (st * ratio)
+        )
+        $ zip start end
+    lower_limit =
+      fmap
+        ( \(st, e) ->
+            Limits ((e - i) * ratio) ((st - i) * ratio)
+        )
+        $ zip start end
+    mid1 = boolToCoords (last upper_limit) ((fromIntegral $ length b) * len) (last b)
+    mid2 = boolToCoords (last lower_limit) ((fromIntegral $ length b) * len) (last b)
+
+fourth :: (a, b, c, d) -> d
+fourth (_, _, _, d) = d
+
+toListLength :: [Double] -> Ribbon -> [Double]
+toListLength d (Ribbon r i) =
+  fmap boolToDouble (zip d r)
+  where
+    boolToDouble (d', True) = d' + i
+    boolToDouble (d', False) = d'
+
+initColumns :: Double -> [Ribbon] -> [Double]
+initColumns d (Ribbon r _ : _) = replicate (length r) d
+initColumns _ _ = []
+
+calcMaxColumns :: [Ribbon] -> [Double]
+calcMaxColumns rs = foldl toListLength (initColumns 0 rs) rs
 
 drawRibbons :: Double -> Double -> [Ribbon] -> String
 drawRibbons ratio len rs =
-  snd $ foldl (drawArrow ratio len total) (total, "") rs
+  fourth $ foldl (drawArrow ratio len) (1, total, ends, "") rs
   where
-    total = sum $ map (\(Ribbon _ y) -> y) rs
+    total = initColumns ((+ (0.5 / ratio)) . sum $ fmap (\(Ribbon _ d) -> d) rs) rs
+    ends = fmap (\(m, t) -> t - m - 0.5 / ratio) $ zip (calcMaxColumns rs) total
 
 fpga2020 :: [Ribbon]
 fpga2020 =
@@ -79,7 +130,7 @@ fpga2020 =
   ]
 
 printAll :: IO ()
-printAll = putStrLn $ drawRibbons 0.05 3.0 fpga2020
+printAll = putStrLn $ drawRibbons 0.05 2.0 fpga2020
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
